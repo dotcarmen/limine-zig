@@ -14,4 +14,36 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/root.zig"),
     });
     module.addImport("config", config.createModule());
+
+    const dist = b.dependency("limine-dist", .{});
+    inline for (.{
+        "BOOTAA64.EFI",
+        "BOOTIA32.EFI",
+        "BOOTLOONGARCH64.EFI",
+        "BOOTRISCV64.EFI",
+        "BOOTX64.EFI",
+        "limine-bios-cd.bin",
+        "limine-bios-pxe.bin",
+        "limine-bios.sys",
+        "limine-uefi-cd.bin",
+    }) |path| {
+        b.addNamedLazyPath(path, dist.path(path));
+    }
+
+    const limine_cli = b.addModule("cli", .{
+        .link_libc = true,
+        .optimize = .ReleaseSafe,
+        .target = b.resolveTargetQuery(.{}),
+    });
+    limine_cli.addCSourceFile(.{
+        .file = dist.path("limine.c"),
+    });
+    limine_cli.addIncludePath(dist.path(""));
+
+    const limine_cli_exe = b.addExecutable(.{
+        .name = "limine",
+        .root_module = limine_cli,
+    });
+
+    b.installArtifact(limine_cli_exe);
 }

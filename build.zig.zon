@@ -1,9 +1,14 @@
 .{
     .name = .limine,
-    .version = "0.0.0",
+    .version = "9.5.0",
     .fingerprint = 0x123a7731fb588264,
     .minimum_zig_version = "0.14.0",
-    .dependencies = .{},
+    .dependencies = .{
+        .@"limine-dist" = .{
+            .url = "git+https://github.com/limine-bootloader/limine?ref=v9.5.0-binary#0765b5db055680471cea3180e8277dcf701847dc",
+            .hash = "N-V-__8AAA4vSQDKE5DPaumTSNF9J-3tk8DJ_VlfFtts9Nwi",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",
