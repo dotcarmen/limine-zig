@@ -1,7 +1,7 @@
 .{
-    .name = .limine_zig,
+    .name = .limine,
     .version = "0.0.0",
-    .fingerprint = 0x439c475b40f038d5,
+    .fingerprint = 0x123a7731fb588264,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{},
     .paths = .{
