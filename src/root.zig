@@ -38,7 +38,7 @@ pub const RequestsEndMarker = extern struct {
 
 pub const BaseRevision = extern struct {
     magic: [2]u64 = .{ 0xf9562b2d5c95a6c8, 0x6a7b384944536bdc },
-    revision: u64,
+    revision: u64 = config.api_revision,
 
     pub fn init(revision: u64) @This() {
         return .{ .revision = revision };
