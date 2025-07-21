@@ -1,8 +1,9 @@
+pub const config = @import("config");
+
 const builtin = @import("builtin");
-const config = @import("config");
 const std = @import("std");
 
-pub const Arch = enum {
+const Arch = enum {
     x86_64,
     aarch64,
     riscv64,
@@ -10,7 +11,7 @@ pub const Arch = enum {
 };
 
 pub const api_revision = config.api_revision;
-pub const arch: Arch = switch (builtin.cpu.arch) {
+const arch: Arch = switch (builtin.cpu.arch) {
     .x86_64 => .x86_64,
     .aarch64 => .aarch64,
     .riscv64 => .riscv64,
@@ -21,15 +22,6 @@ pub const arch: Arch = switch (builtin.cpu.arch) {
 fn id(a: u64, b: u64) [4]u64 {
     return .{ 0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, a, b };
 }
-
-fn LiminePtr(comptime Type: type) type {
-    return if (config.no_pointers) u64 else Type;
-}
-
-const init_pointer = if (config.no_pointers)
-    0
-else
-    null;
 
 pub const RequestsStartMarker = extern struct {
     marker: [4]u64 = .{
@@ -81,10 +73,10 @@ pub const MediaType = enum(u32) {
 
 const LimineFileV1 = extern struct {
     revision: u64,
-    address: LiminePtr(*align(4096) anyopaque),
+    address: ?*align(4096) anyopaque,
     size: u64,
-    path: LiminePtr([*:0]u8),
-    cmdline: LiminePtr([*:0]u8),
+    path: ?[*:0]u8,
+    cmdline: ?[*:0]u8,
     media_type: MediaType,
     unused: u32,
     tftp_ip: u32,
@@ -98,10 +90,10 @@ const LimineFileV1 = extern struct {
 
 const LimineFileV2 = extern struct {
     revision: u64,
-    address: LiminePtr(*align(4096) anyopaque),
+    address: ?*align(4096) anyopaque,
     size: u64,
-    path: LiminePtr([*:0]u8),
-    string: LiminePtr([*:0]u8),
+    path: ?[*:0]u8,
+    string: ?[*:0]u8,
     media_type: MediaType,
     unused: u32,
     tftp_ip: u32,
@@ -122,27 +114,27 @@ else
 
 pub const BootloaderInfoResponse = extern struct {
     revision: u64,
-    name: LiminePtr([*:0]u8),
-    version: LiminePtr([*:0]u8),
+    name: ?[*:0]u8,
+    version: ?[*:0]u8,
 };
 
 pub const BootloaderInfoRequest = extern struct {
     id: [4]u64 = id(0xf55038d8e2a1202f, 0x279426fcf5f59740),
     revision: u64 = 0,
-    response: LiminePtr(?*BootloaderInfoResponse) = init_pointer,
+    response: ?*BootloaderInfoResponse = null,
 };
 
 // Executable command line
 
 pub const ExecutableCmdlineResponse = extern struct {
     revision: u64,
-    cmdline: LiminePtr([*:0]u8),
+    cmdline: ?[*:0]u8,
 };
 
 pub const ExecutableCmdlineRequest = extern struct {
     id: [4]u64 = id(0x4b161536e598651e, 0xb390ad4a2f1f303a),
     revision: u64 = 0,
-    response: LiminePtr(?*ExecutableCmdlineResponse) = init_pointer,
+    response: ?*ExecutableCmdlineResponse = null,
 };
 
 // Firmware type
@@ -163,7 +155,7 @@ pub const FirmwareTypeResponse = extern struct {
 pub const FirmwareTypeRequest = extern struct {
     id: [4]u64 = id(0x8c2f75d90bef28a8, 0x7045a4688eac00c3),
     revision: u64 = 0,
-    response: LiminePtr(?*FirmwareTypeResponse) = init_pointer,
+    response: ?*FirmwareTypeResponse = null,
 };
 
 // Stack size
@@ -175,7 +167,7 @@ pub const StackSizeResponse = extern struct {
 pub const StackSizeRequest = extern struct {
     id: [4]u64 = id(0x224ef0460a8e8926, 0xe1cb0fc25f46ea3d),
     revision: u64 = 0,
-    response: LiminePtr(?*StackSizeResponse) = init_pointer,
+    response: ?*StackSizeResponse = null,
     stack_size: u64,
 };
 
@@ -189,7 +181,7 @@ pub const HhdmResponse = extern struct {
 pub const HhdmRequest = extern struct {
     id: [4]u64 = id(0x48dcf1cb8ad2b852, 0x63984e959a98244b),
     revision: u64 = 0,
-    response: LiminePtr(?*HhdmResponse) = init_pointer,
+    response: ?*HhdmResponse = null,
 };
 
 // Framebuffer
@@ -214,7 +206,7 @@ pub const VideoMode = extern struct {
 };
 
 pub const Framebuffer = extern struct {
-    address: LiminePtr(*anyopaque),
+    address: ?*anyopaque,
     width: u64,
     height: u64,
     pitch: u64,
@@ -227,10 +219,10 @@ pub const Framebuffer = extern struct {
     blue_mask_size: u8,
     blue_mask_shift: u8,
     edid_size: u64,
-    edid: LiminePtr(?*anyopaque),
+    edid: ?*anyopaque,
     // Response revision 1
     mode_count: u64,
-    modes: LiminePtr([*]*VideoMode),
+    modes: ?[*]*VideoMode,
 
     /// Helper function to retrieve the EDID data as a slice.
     /// This function will return null if the EDID size is 0 or if
@@ -250,14 +242,14 @@ pub const Framebuffer = extern struct {
         if (response.revision < 1) {
             return error.NotSupported;
         }
-        return self.modes[0..self.mode_count];
+        return self.modes.?[0..self.mode_count];
     }
 };
 
 pub const FramebufferResponse = extern struct {
     revision: u64,
     framebuffer_count: u64,
-    framebuffers: LiminePtr(?[*]*Framebuffer),
+    framebuffers: ?[*]*Framebuffer,
 
     /// Helper function to retrieve a slice of the framebuffers array.
     /// This function will return null if the framebuffer count is 0 or if
@@ -273,7 +265,7 @@ pub const FramebufferResponse = extern struct {
 pub const FramebufferRequest = extern struct {
     id: [4]u64 = id(0x9d5827dcd881dd75, 0xa3148604f6fab11b),
     revision: u64 = 1,
-    response: LiminePtr(?*FramebufferResponse) = init_pointer,
+    response: ?*FramebufferResponse = null,
 };
 
 // Terminal
@@ -388,14 +380,14 @@ const TerminalFeature = struct {
     pub const Terminal = extern struct {
         columns: u64,
         rows: u64,
-        framebuffer: LiminePtr(?*Framebuffer),
+        framebuffer: ?*Framebuffer,
     };
 
     pub const TerminalResponse = extern struct {
         revision: u64,
         terminal_count: u64,
-        terminals: LiminePtr(?[*]*Terminal),
-        write_fn: LiminePtr(TerminalWrite),
+        terminals: ?[*]*Terminal,
+        write_fn: ?TerminalWrite,
 
         /// Helper function to retrieve a slice of the terminals array.
         /// This function will return null if the terminal count is 0 or if
@@ -421,15 +413,15 @@ const TerminalFeature = struct {
     pub const TerminalRequest = extern struct {
         id: [4]u64 = id(0xc8ac59310c2b0844, 0xa68d0c7265d38878),
         revision: u64 = 0,
-        response: LiminePtr(?*TerminalResponse) = init_pointer,
-        callback: LiminePtr(?TerminalCallback),
+        response: ?*TerminalResponse = null,
+        callback: ?TerminalCallback,
     };
 };
 
-pub usingnamespace if (config.allow_deprecated)
-    TerminalFeature
-else
-    TerminalDeprecated;
+// pub usingnamespace if (config.allow_deprecated)
+//     TerminalFeature
+// else
+//     TerminalDeprecated;
 
 // Paging mode
 
@@ -480,7 +472,7 @@ pub const PagingModeResponse = extern struct {
 pub const PagingModeRequest = extern struct {
     id: [4]u64 = id(0x95c1a0edab0944cb, 0xa4e5cb3842f7488a),
     revision: u64 = 0,
-    response: LiminePtr(?*PagingModeResponse) = init_pointer,
+    response: ?*PagingModeResponse = null,
     mode: PagingMode = .default,
     max_mode: PagingMode = .max,
     min_mode: PagingMode = .min,
@@ -507,18 +499,18 @@ const FiveLevelPagingFeature = struct {
     pub const FiveLevelPagingRequest = extern struct {
         id: [4]u64 = id(0x94469551da9b3192, 0xebe5e86db7382888),
         revision: u64 = 0,
-        response: LiminePtr(?*FiveLevelPagingResponse) = init_pointer,
+        response: ?*FiveLevelPagingResponse = null,
     };
 };
 
-pub usingnamespace if (config.allow_deprecated)
-    FiveLevelPagingFeature
-else
-    FiveLevelPagingDeprecated;
+// pub usingnamespace if (config.allow_deprecated)
+//     FiveLevelPagingFeature
+// else
+//     FiveLevelPagingDeprecated;
 
 // MP (formerly SMP)
 
-pub const GotoAddress = *const fn (*SmpMpInfo) callconv(.c) noreturn;
+pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
 
 const SmpMpFlags = switch (arch) {
     .x86_64 => packed struct(u32) {
@@ -535,21 +527,21 @@ const SmpMpInfo = switch (arch) {
         processor_id: u32,
         lapic_id: u32,
         reserved: u64,
-        goto_address: LiminePtr(?GotoAddress),
+        goto_address: ?*const GotoAddress,
         extra_argument: u64,
     },
     .aarch64 => extern struct {
         processor_id: u32,
         mpidr: u64,
         reserved: u64,
-        goto_address: LiminePtr(?GotoAddress),
+        goto_address: ?*const GotoAddress,
         extra_argument: u64,
     },
     .riscv64 => extern struct {
         processor_id: u64,
         hartid: u64,
         reserved: u64,
-        goto_address: LiminePtr(?GotoAddress),
+        goto_address: ?*const GotoAddress,
         extra_argument: u64,
     },
     .loongarch64 => extern struct {
@@ -563,7 +555,7 @@ const SmpMpResponse = switch (arch) {
         flags: SmpMpFlags,
         bsp_lapic_id: u32,
         cpu_count: u64,
-        cpus: LiminePtr(?[*]*SmpMpInfo),
+        cpus: ?[*]*SmpMpInfo,
 
         /// Helper function to retrieve a slice of the CPUs array.
         /// This function will return null if the CPU count is 0 or if
@@ -580,7 +572,7 @@ const SmpMpResponse = switch (arch) {
         flags: SmpMpFlags,
         bsp_mpidr: u64,
         cpu_count: u64,
-        cpus: LiminePtr(?[*]*SmpMpInfo),
+        cpus: ?[*]*SmpMpInfo,
 
         /// Helper function to retrieve a slice of the CPUs array.
         /// This function will return null if the CPU count is 0 or if
@@ -597,7 +589,7 @@ const SmpMpResponse = switch (arch) {
         flags: SmpMpFlags,
         bsp_hartid: u64,
         cpu_count: u64,
-        cpus: LiminePtr(?[*]*SmpMpInfo),
+        cpus: ?[*]*SmpMpInfo,
 
         /// Helper function to retrieve a slice of the CPUs array.
         /// This function will return null if the CPU count is 0 or if
@@ -611,7 +603,7 @@ const SmpMpResponse = switch (arch) {
     },
     .loongarch64 => extern struct {
         cpu_count: u64,
-        cpus: LiminePtr(?[*]*SmpMpInfo),
+        cpus: ?[*]*SmpMpInfo,
 
         /// Helper function to retrieve a slice of the CPUs array.
         /// This function will return null if the CPU count is 0 or if
@@ -628,7 +620,7 @@ const SmpMpResponse = switch (arch) {
 const SmpMpRequest = extern struct {
     id: [4]u64 = id(0x95a67b819a1b857e, 0xa0b61b723b6a73e0),
     revision: u64 = 0,
-    response: LiminePtr(?*SmpMpResponse) = init_pointer,
+    response: ?*SmpMpResponse = null,
     // The `flags` field in the request is 64-bit on *all* platforms, even
     // though the flags enum is 32-bit on x86_64. This is to ensure that the
     // struct is not too small on x86_64 there is a `reserved: u32` field after it.
@@ -650,10 +642,10 @@ const SmpFeature = struct {
     pub const SmpRequest = SmpMpRequest;
 };
 
-pub usingnamespace if (config.api_revision >= 1)
-    MpFeature
-else
-    SmpFeature;
+// pub usingnamespace if (config.api_revision >= 1)
+//     MpFeature
+// else
+//     SmpFeature;
 
 // Memory map
 
@@ -695,7 +687,7 @@ pub const MemoryMapEntry = extern struct {
 pub const MemoryMapResponse = extern struct {
     revision: u64,
     entry_count: u64,
-    entries: LiminePtr(?[*]*MemoryMapEntry),
+    entries: ?[*]*MemoryMapEntry,
 
     /// Helper function to retrieve a slice of the entries array.
     /// This function will return null if the entry count is 0 or if
@@ -711,12 +703,12 @@ pub const MemoryMapResponse = extern struct {
 pub const MemoryMapRequest = extern struct {
     id: [4]u64 = id(0x67cf3d9d378a806f, 0xe304acdfc50c3c62),
     revision: u64 = 0,
-    response: LiminePtr(?*MemoryMapResponse) = init_pointer,
+    response: ?*MemoryMapResponse = null,
 };
 
 // Entry point
 
-pub const EntryPoint = *const fn () callconv(.c) noreturn;
+pub const EntryPoint = fn () callconv(.c) noreturn;
 
 pub const EntryPointResponse = extern struct {
     revision: u64,
@@ -725,8 +717,8 @@ pub const EntryPointResponse = extern struct {
 pub const EntryPointRequest = extern struct {
     id: [4]u64 = id(0x13d86c035a1cd3e1, 0x2b0caa89d8f3026a),
     revision: u64 = 0,
-    response: LiminePtr(?*EntryPointResponse) = init_pointer,
-    entry: LiminePtr(EntryPoint),
+    response: ?*EntryPointResponse = null,
+    entry: ?*const EntryPoint,
 };
 
 // Executable file (formerly Kernel file)
@@ -734,33 +726,33 @@ pub const EntryPointRequest = extern struct {
 const ExecutableFileFeature = struct {
     pub const ExecutableFileResponse = extern struct {
         revision: u64,
-        executable_file: LiminePtr(*File),
+        executable_file: ?*File,
     };
 
     pub const ExecutableFileRequest = extern struct {
         id: [4]u64 = id(0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69),
         revision: u64 = 0,
-        response: LiminePtr(?*ExecutableFileResponse) = init_pointer,
+        response: ?*ExecutableFileResponse = null,
     };
 };
 
 const KernelFileFeature = struct {
     pub const KernelFileResponse = extern struct {
         revision: u64,
-        kernel_file: LiminePtr(*File),
+        kernel_file: ?*File,
     };
 
     pub const KernelFileRequest = extern struct {
         id: [4]u64 = id(0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69),
         revision: u64 = 0,
-        response: LiminePtr(?*KernelFileResponse) = init_pointer,
+        response: ?*KernelFileResponse = null,
     };
 };
 
-pub usingnamespace if (config.api_revision >= 2)
-    ExecutableFileFeature
-else
-    KernelFileFeature;
+// pub usingnamespace if (config.api_revision >= 2)
+//     ExecutableFileFeature
+// else
+//     KernelFileFeature;
 
 // Module
 
@@ -771,14 +763,14 @@ pub const InternalModuleFlag = packed struct(u64) {
 };
 
 const InternalModuleV1 = extern struct {
-    path: LiminePtr([*:0]const u8),
-    cmdline: LiminePtr([*:0]const u8),
+    path: ?[*:0]const u8,
+    cmdline: ?[*:0]const u8,
     flags: InternalModuleFlag,
 };
 
 const InternalModuleV2 = extern struct {
-    path: LiminePtr([*:0]const u8),
-    string: LiminePtr([*:0]const u8),
+    path: ?[*:0]const u8,
+    string: ?[*:0]const u8,
     flags: InternalModuleFlag,
 };
 
@@ -790,7 +782,7 @@ else
 pub const ModuleResponse = extern struct {
     revision: u64,
     module_count: u64,
-    modules: LiminePtr(?[*]*File),
+    modules: ?[*]*File,
 
     /// Helper function to retrieve a slice of the modules array.
     /// This function will return null if the module count is 0 or if
@@ -806,18 +798,17 @@ pub const ModuleResponse = extern struct {
 pub const ModuleRequest = extern struct {
     id: [4]u64 = id(0x3e7e279702be32af, 0xca1c4f3bd1280cee),
     revision: u64 = 1,
-    response: LiminePtr(?*ModuleResponse) = init_pointer,
+    response: ?*ModuleResponse = null,
     // Request revision 1
     internal_module_count: u64 = 0,
-    internal_modules: LiminePtr(?[*]const *const InternalModule) =
-        if (config.no_pointers) 0 else null,
+    internal_modules: ?[*]const *const InternalModule = null,
 };
 
 // RSDP
 
 const RsdpResponseV1 = extern struct {
     revision: u64,
-    address: LiminePtr(*anyopaque),
+    address: ?*anyopaque,
 };
 
 const RsdpResponseV2 = extern struct {
@@ -836,15 +827,15 @@ else
 pub const RsdpRequest = extern struct {
     id: [4]u64 = id(0xc5e77b6b397e7b43, 0x27637845accdcf3c),
     revision: u64 = 0,
-    response: LiminePtr(?*RsdpResponse) = init_pointer,
+    response: ?*RsdpResponse = null,
 };
 
 // SMBIOS
 
 const SmBiosResponseV1 = extern struct {
     revision: u64,
-    entry_32: LiminePtr(?*anyopaque),
-    entry_64: LiminePtr(?*anyopaque),
+    entry_32: ?*anyopaque,
+    entry_64: ?*anyopaque,
 };
 
 const SmBiosResponseV2 = extern struct {
@@ -864,7 +855,7 @@ else
 pub const SmBiosRequest = extern struct {
     id: [4]u64 = id(0x9e9046f11e095391, 0xaa4a520fefbde5ee),
     revision: u64 = 0,
-    response: LiminePtr(?*SmBiosResponse) = init_pointer,
+    response: ?*SmBiosResponse = null,
 };
 
 // EFI system table
@@ -872,7 +863,7 @@ pub const SmBiosRequest = extern struct {
 ///
 const EfiSystemTableResponseV1 = extern struct {
     revision: u64,
-    address: LiminePtr(?*std.os.uefi.tables.SystemTable),
+    address: ?*std.os.uefi.tables.SystemTable,
 };
 
 const EfiSystemTableResponseV2 = extern struct {
@@ -891,14 +882,14 @@ else
 pub const EfiSystemTableRequest = extern struct {
     id: [4]u64 = id(0x5ceba5163eaaf6d6, 0x0a6981610cf65fcc),
     revision: u64 = 0,
-    response: LiminePtr(?*EfiSystemTableResponse) = init_pointer,
+    response: ?*EfiSystemTableResponse = null,
 };
 
 // EFI memory map
 
 pub const EfiMemoryMapResponse = extern struct {
     revision: u64,
-    memmap: LiminePtr(*anyopaque),
+    memmap: ?*anyopaque,
     memmap_size: u64,
     desc_size: u64,
     desc_version: u64,
@@ -907,7 +898,7 @@ pub const EfiMemoryMapResponse = extern struct {
 pub const EfiMemoryMapRequest = extern struct {
     id: [4]u64 = id(0x7df62a431d6872d5, 0xa4fcdfb3e57306c8),
     revision: u64 = 0,
-    response: LiminePtr(?*EfiMemoryMapResponse) = init_pointer,
+    response: ?*EfiMemoryMapResponse = null,
 };
 
 // Date at boot (formerly Boot time)
@@ -921,7 +912,7 @@ const DateAtBootFeature = struct {
     pub const DateAtBootRequest = extern struct {
         id: [4]u64 = id(0x502746e184c088aa, 0xfbc5ec83e6327893),
         revision: u64 = 0,
-        response: LiminePtr(?*DateAtBootResponse) = init_pointer,
+        response: ?*DateAtBootResponse = null,
     };
 };
 
@@ -934,14 +925,14 @@ const BootTimeFeature = struct {
     pub const BootTimeRequest = extern struct {
         id: [4]u64 = id(0x502746e184c088aa, 0xfbc5ec83e6327893),
         revision: u64 = 0,
-        response: LiminePtr(?*BootTimeResponse) = init_pointer,
+        response: ?*BootTimeResponse = null,
     };
 };
 
-pub usingnamespace if (config.api_revision >= 3)
-    DateAtBootFeature
-else
-    BootTimeFeature;
+// pub usingnamespace if (config.api_revision >= 3)
+//     DateAtBootFeature
+// else
+//     BootTimeFeature;
 
 // Executable address (formerly Kernel address)
 
@@ -955,7 +946,7 @@ const ExecutableAddressFeature = struct {
     pub const ExecutableAddressRequest = extern struct {
         id: [4]u64 = id(0x71ba76863cc55f63, 0xb2644a48c516a487),
         revision: u64 = 0,
-        response: LiminePtr(?*ExecutableAddressResponse) = init_pointer,
+        response: ?*ExecutableAddressResponse = null,
     };
 };
 
@@ -969,26 +960,26 @@ const KernelAddressFeature = struct {
     pub const KernelAddressRequest = extern struct {
         id: [4]u64 = id(0x71ba76863cc55f63, 0xb2644a48c516a487),
         revision: u64 = 0,
-        response: LiminePtr(?*KernelAddressResponse) = init_pointer,
+        response: ?*KernelAddressResponse = null,
     };
 };
 
-pub usingnamespace if (config.api_revision >= 2)
-    ExecutableAddressFeature
-else
-    KernelAddressFeature;
+// pub usingnamespace if (config.api_revision >= 2)
+//     ExecutableAddressFeature
+// else
+//     KernelAddressFeature;
 
 // Device Tree Blob
 
 pub const DtbResponse = extern struct {
     revision: u64,
-    dtb_ptr: LiminePtr(*anyopaque),
+    dtb_ptr: ?*anyopaque,
 };
 
 pub const DtbRequest = extern struct {
     id: [4]u64 = id(0xb40ddb48fb54bac7, 0x545081493f81ffb7),
     revision: u64 = 0,
-    response: LiminePtr(?*DtbResponse) = init_pointer,
+    response: ?*DtbResponse = null,
 };
 
 // RISC-V Boot Hart ID
@@ -1001,13 +992,15 @@ pub const RiscvBootHartIdResponse = extern struct {
 pub const RiscvBootHartIdRequest = extern struct {
     id: [4]u64 = id(0x1369359f025525f9, 0x2ff2a56178391bb6),
     revision: u64 = 0,
-    response: LiminePtr(?*RiscvBootHartIdResponse) = init_pointer,
+    response: ?*RiscvBootHartIdResponse = null,
 };
 
 comptime {
     if (config.api_revision > 3) {
         @compileError("Limine API revision must be 3 or lower");
     }
+}
 
+test {
     std.testing.refAllDeclsRecursive(@This());
 }
