@@ -219,7 +219,7 @@ pub const Framebuffer = extern struct {
     blue_mask_size: u8,
     blue_mask_shift: u8,
     edid_size: u64,
-    edid: ?*anyopaque,
+    edid: ?[*]u8,
     // Response revision 1
     mode_count: u64,
     modes: ?[*]*VideoMode,
@@ -227,11 +227,11 @@ pub const Framebuffer = extern struct {
     /// Helper function to retrieve the EDID data as a slice.
     /// This function will return null if the EDID size is 0 or if
     /// the EDID pointer is null.
-    pub fn getEdid(self: @This()) ?[*]u8 {
+    pub fn getEdid(self: @This()) ?[]u8 {
         if (self.edid_size == 0 or self.edid == null) {
             return null;
         }
-        return @as([*]u8, self.edid.?)[0..self.edid_size];
+        return self.edid.?[0..self.edid_size];
     }
 
     /// Helper function to retrieve a slice of the modes array.
@@ -325,8 +325,6 @@ pub const PagingModeRequest = extern struct {
 
 // MP (formerly SMP)
 
-pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
-
 const SmpMpFlags = switch (arch) {
     .x86_64 => packed struct(u32) {
         x2apic: bool = false,
@@ -339,6 +337,8 @@ const SmpMpFlags = switch (arch) {
 
 const SmpMpInfo = switch (arch) {
     .x86_64 => extern struct {
+        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
+
         processor_id: u32,
         lapic_id: u32,
         reserved: u64,
@@ -346,6 +346,8 @@ const SmpMpInfo = switch (arch) {
         extra_argument: u64,
     },
     .aarch64 => extern struct {
+        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
+
         processor_id: u32,
         mpidr: u64,
         reserved: u64,
@@ -353,6 +355,8 @@ const SmpMpInfo = switch (arch) {
         extra_argument: u64,
     },
     .riscv64 => extern struct {
+        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
+
         processor_id: u64,
         hartid: u64,
         reserved: u64,
@@ -360,6 +364,8 @@ const SmpMpInfo = switch (arch) {
         extra_argument: u64,
     },
     .loongarch64 => extern struct {
+        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
+
         reserved: u64,
     },
 };
