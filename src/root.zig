@@ -2,6 +2,25 @@ pub const config = @import("config");
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+
+fn deprecated(comptime since_revision: u64, T: type, comptime msg: []const u8) T {
+    if (since_revision > config.api_revision)
+        @compileError(std.fmt.comptimePrint(
+            "deprecated since limine api revision {d}: {s}",
+            .{ since_revision, msg },
+        ));
+    return T;
+}
+
+fn since(comptime since_revision: u64, T: type, comptime msg: []const u8) T {
+    if (config.api_revision < since_revision)
+        @compileError(std.fmt.comptimePrint(
+            "available since limine api revision {d}: {s}",
+            .{ since_revision, msg },
+        ));
+    return T;
+}
 
 const Arch = enum {
     x86_64,
@@ -71,12 +90,13 @@ pub const MediaType = enum(u32) {
     _,
 };
 
-const LimineFileV1 = extern struct {
+pub const File = extern struct {
     revision: u64,
     address: ?*align(4096) anyopaque,
     size: u64,
     path: ?[*:0]u8,
-    cmdline: ?[*:0]u8,
+    string: if (config.api_revision >= 3) ?[*:0]u8 else void,
+    cmdline: if (config.api_revision >= 3) void else ?[*:0]u8,
     media_type: MediaType,
     unused: u32,
     tftp_ip: u32,
@@ -87,54 +107,36 @@ const LimineFileV1 = extern struct {
     gpt_part_uuid: Uuid,
     part_uuid: Uuid,
 };
-
-const LimineFileV2 = extern struct {
-    revision: u64,
-    address: ?*align(4096) anyopaque,
-    size: u64,
-    path: ?[*:0]u8,
-    string: ?[*:0]u8,
-    media_type: MediaType,
-    unused: u32,
-    tftp_ip: u32,
-    tftp_port: u32,
-    partition_index: u32,
-    mbr_disk_id: u32,
-    gpt_disk_uuid: Uuid,
-    gpt_part_uuid: Uuid,
-    part_uuid: Uuid,
-};
-
-pub const File = if (config.api_revision >= 3)
-    LimineFileV2
-else
-    LimineFileV1;
 
 // Boot info
 
-pub const BootloaderInfoResponse = extern struct {
-    revision: u64,
-    name: ?[*:0]u8,
-    version: ?[*:0]u8,
-};
+pub const BootloaderInfo = struct {
+    pub const Response = extern struct {
+        revision: u64,
+        name: ?[*:0]u8,
+        version: ?[*:0]u8,
+    };
 
-pub const BootloaderInfoRequest = extern struct {
-    id: [4]u64 = id(0xf55038d8e2a1202f, 0x279426fcf5f59740),
-    revision: u64 = 0,
-    response: ?*BootloaderInfoResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0xf55038d8e2a1202f, 0x279426fcf5f59740),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // Executable command line
 
-pub const ExecutableCmdlineResponse = extern struct {
-    revision: u64,
-    cmdline: ?[*:0]u8,
-};
+pub const ExecutableCmdline = struct {
+    pub const Response = extern struct {
+        revision: u64,
+        cmdline: ?[*:0]u8,
+    };
 
-pub const ExecutableCmdlineRequest = extern struct {
-    id: [4]u64 = id(0x4b161536e598651e, 0xb390ad4a2f1f303a),
-    revision: u64 = 0,
-    response: ?*ExecutableCmdlineResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x4b161536e598651e, 0xb390ad4a2f1f303a),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // Firmware type
@@ -145,65 +147,50 @@ pub const FirmwareType = enum(u64) {
     uefi64 = 2,
     sbi = 3,
     _,
-};
 
-pub const FirmwareTypeResponse = extern struct {
-    revision: u64,
-    firmware_type: FirmwareType,
-};
+    pub const Response = extern struct {
+        revision: u64,
+        firmware_type: FirmwareType,
+    };
 
-pub const FirmwareTypeRequest = extern struct {
-    id: [4]u64 = id(0x8c2f75d90bef28a8, 0x7045a4688eac00c3),
-    revision: u64 = 0,
-    response: ?*FirmwareTypeResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x8c2f75d90bef28a8, 0x7045a4688eac00c3),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // Stack size
 
-pub const StackSizeResponse = extern struct {
-    revision: u64,
-};
+pub const StackSize = struct {
+    pub const Response = extern struct {
+        revision: u64,
+    };
 
-pub const StackSizeRequest = extern struct {
-    id: [4]u64 = id(0x224ef0460a8e8926, 0xe1cb0fc25f46ea3d),
-    revision: u64 = 0,
-    response: ?*StackSizeResponse = null,
-    stack_size: u64,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x224ef0460a8e8926, 0xe1cb0fc25f46ea3d),
+        revision: u64 = 0,
+        response: ?*Response = null,
+        stack_size: u64,
+    };
 };
 
 // HHDM
 
-pub const HhdmResponse = extern struct {
-    revision: u64,
-    offset: u64,
-};
+pub const Hhdm = struct {
+    pub const Response = extern struct {
+        revision: u64,
+        offset: u64,
+    };
 
-pub const HhdmRequest = extern struct {
-    id: [4]u64 = id(0x48dcf1cb8ad2b852, 0x63984e959a98244b),
-    revision: u64 = 0,
-    response: ?*HhdmResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x48dcf1cb8ad2b852, 0x63984e959a98244b),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // Framebuffer
-
-pub const FramebufferMemoryModel = enum(u8) {
-    rgb = 1,
-    _,
-};
-
-pub const VideoMode = extern struct {
-    pitch: u64,
-    width: u64,
-    height: u64,
-    bpp: u16,
-    memory_model: FramebufferMemoryModel,
-    red_mask_size: u8,
-    red_mask_shift: u8,
-    green_mask_size: u8,
-    green_mask_shift: u8,
-    blue_mask_size: u8,
-    blue_mask_shift: u8,
-};
 
 pub const Framebuffer = extern struct {
     address: ?*anyopaque,
@@ -211,7 +198,7 @@ pub const Framebuffer = extern struct {
     height: u64,
     pitch: u64,
     bpp: u16,
-    memory_model: FramebufferMemoryModel,
+    memory_model: MemoryModel,
     red_mask_size: u8,
     red_mask_shift: u8,
     green_mask_size: u8,
@@ -238,34 +225,53 @@ pub const Framebuffer = extern struct {
     /// This function is only available since revision 1 of the response and
     /// will return an error if called with an older response. This is to
     /// prevent the user from possibly accessing uninitialized memory.
-    pub fn getModes(self: @This(), response: *FramebufferResponse) ![]*VideoMode {
+    pub fn getModes(self: @This(), response: *Response) ![]*VideoMode {
         if (response.revision < 1) {
             return error.NotSupported;
         }
         return self.modes.?[0..self.mode_count];
     }
-};
 
-pub const FramebufferResponse = extern struct {
-    revision: u64,
-    framebuffer_count: u64,
-    framebuffers: ?[*]*Framebuffer,
+    pub const MemoryModel = enum(u8) {
+        rgb = 1,
+        _,
+    };
 
-    /// Helper function to retrieve a slice of the framebuffers array.
-    /// This function will return null if the framebuffer count is 0 or if
-    /// the framebuffers pointer is null.
-    pub fn getFramebuffers(self: @This()) []*Framebuffer {
-        if (self.framebuffer_count == 0 or self.framebuffers == null) {
-            return &.{};
+    pub const VideoMode = extern struct {
+        pitch: u64,
+        width: u64,
+        height: u64,
+        bpp: u16,
+        memory_model: MemoryModel,
+        red_mask_size: u8,
+        red_mask_shift: u8,
+        green_mask_size: u8,
+        green_mask_shift: u8,
+        blue_mask_size: u8,
+        blue_mask_shift: u8,
+    };
+
+    pub const Response = extern struct {
+        revision: u64,
+        framebuffer_count: u64,
+        framebuffers: ?[*]*Framebuffer,
+
+        /// Helper function to retrieve a slice of the framebuffers array.
+        /// This function will return null if the framebuffer count is 0 or if
+        /// the framebuffers pointer is null.
+        pub fn getFramebuffers(self: @This()) []*Framebuffer {
+            if (self.framebuffer_count == 0 or self.framebuffers == null) {
+                return &.{};
+            }
+            return self.framebuffers.?[0..self.framebuffer_count];
         }
-        return self.framebuffers.?[0..self.framebuffer_count];
-    }
-};
+    };
 
-pub const FramebufferRequest = extern struct {
-    id: [4]u64 = id(0x9d5827dcd881dd75, 0xa3148604f6fab11b),
-    revision: u64 = 1,
-    response: ?*FramebufferResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x9d5827dcd881dd75, 0xa3148604f6fab11b),
+        revision: u64 = 1,
+        response: ?*Response = null,
+    };
 };
 
 // Paging mode
@@ -276,18 +282,24 @@ pub const PagingMode = switch (arch) {
         @"5lvl",
         _,
 
-        const min: @This() = .@"4lvl";
-        const max: @This() = .@"5lvl";
-        const default: @This() = .@"4lvl";
+        pub const min: @This() = .@"4lvl";
+        pub const max: @This() = .@"5lvl";
+        pub const default: @This() = .@"4lvl";
+
+        pub const Request = PagingModeRequest;
+        pub const Response = PagingModeResponse;
     },
     .aarch64 => enum(u64) {
         @"4lvl",
         @"5lvl",
         _,
 
-        const min: @This() = .@"4lvl";
-        const max: @This() = .@"5lvl";
-        const default: @This() = .@"4lvl";
+        pub const min: @This() = .@"4lvl";
+        pub const max: @This() = .@"5lvl";
+        pub const default: @This() = .@"4lvl";
+
+        pub const Request = PagingModeRequest;
+        pub const Response = PagingModeResponse;
     },
     .riscv64 => enum(u64) {
         sv39,
@@ -295,26 +307,32 @@ pub const PagingMode = switch (arch) {
         sv57,
         _,
 
-        const min: @This() = .sv39;
-        const max: @This() = .sv57;
-        const default: @This() = .sv48;
+        pub const min: @This() = .sv39;
+        pub const max: @This() = .sv57;
+        pub const default: @This() = .sv48;
+
+        pub const Request = PagingModeRequest;
+        pub const Response = PagingModeResponse;
     },
     .loongarch64 => enum(u64) {
         @"4lvl",
         _,
 
-        const min: @This() = .@"4lvl";
-        const max: @This() = .@"4lvl";
-        const default: @This() = .@"4lvl";
+        pub const min: @This() = .@"4lvl";
+        pub const max: @This() = .@"4lvl";
+        pub const default: @This() = .@"4lvl";
+
+        pub const Request = PagingModeRequest;
+        pub const Response = PagingModeResponse;
     },
 };
 
-pub const PagingModeResponse = extern struct {
+const PagingModeResponse = extern struct {
     revision: u64,
     mode: PagingMode,
 };
 
-pub const PagingModeRequest = extern struct {
+const PagingModeRequest = extern struct {
     id: [4]u64 = id(0x95c1a0edab0944cb, 0xa4e5cb3842f7488a),
     revision: u64 = 0,
     response: ?*PagingModeResponse = null,
@@ -325,27 +343,8 @@ pub const PagingModeRequest = extern struct {
 
 // MP (formerly SMP)
 
-const SmpMpRequest = extern struct {
-    id: [4]u64 = id(0x95a67b819a1b857e, 0xa0b61b723b6a73e0),
-    revision: u64 = 0,
-    response: ?*Response = null,
-    // The `flags` field in the request is 64-bit on *all* platforms, even
-    // though the flags enum is 32-bit on x86_64. This is to ensure that the
-    // struct is not too small on x86_64 there is a `reserved: u32` field after it.
-    flags: Flags = .{},
-    reserved: u32 = 0,
-
-    const Flags = switch (arch) {
-        .x86_64 => packed struct(u32) {
-            x2apic: bool = false,
-            reserved: u31 = 0,
-        },
-        .aarch64, .riscv64, .loongarch64 => packed struct(u64) {
-            reserved: u64 = 0,
-        },
-    };
-
-    const Info = switch (arch) {
+const MpSmp = struct {
+    pub const Info = switch (arch) {
         .x86_64 => extern struct {
             pub const GotoAddress = fn (*Info) callconv(.c) noreturn;
 
@@ -380,7 +379,28 @@ const SmpMpRequest = extern struct {
         },
     };
 
-    const Response = switch (arch) {
+    pub const Flags = switch (arch) {
+        .x86_64 => packed struct(u32) {
+            x2apic: bool = false,
+            reserved: u31 = 0,
+        },
+        .aarch64, .riscv64, .loongarch64 => packed struct(u64) {
+            reserved: u64 = 0,
+        },
+    };
+
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x95a67b819a1b857e, 0xa0b61b723b6a73e0),
+        revision: u64 = 0,
+        response: ?*Response = null,
+        // The `flags` field in the request is 64-bit on *all* platforms, even
+        // though the flags enum is 32-bit on x86_64. This is to ensure that the
+        // struct is not too small on x86_64 there is a `reserved: u32` field after it.
+        flags: Flags = .{},
+        reserved: u32 = 0,
+    };
+
+    pub const Response = switch (arch) {
         .x86_64 => extern struct {
             revision: u64,
             flags: Flags,
@@ -449,355 +469,328 @@ const SmpMpRequest = extern struct {
     };
 };
 
-pub const MpRequest = if (config.api_revision >= 1) SmpMpRequest else @compileError("MP was called SMP in limine api revision 0");
-pub const SmpRequest = if (config.api_revision == 0) SmpMpRequest else @compileError("SMP was renamed MP in limine api revision 1");
+pub const Mp = since(1, MpSmp,
+    \\Mp was renamed from SMP
+);
+pub const Smp = deprecated(1, MpSmp,
+    \\SMP was renamed MP
+);
 
 // Memory map
 
-const MemoryMapTypeV1 = enum(u64) {
-    usable = 0,
-    reserved = 1,
-    acpi_reclaimable = 2,
-    acpi_nvs = 3,
-    bad_memory = 4,
-    bootloader_reclaimable = 5,
-    kernel_and_modules = 6,
-    framebuffer = 7,
-    _,
-};
+pub const MemoryMap = struct {
+    pub const Type = switch (config.api_revision) {
+        0...1 => enum(u64) {
+            usable = 0,
+            reserved = 1,
+            acpi_reclaimable = 2,
+            acpi_nvs = 3,
+            bad_memory = 4,
+            bootloader_reclaimable = 5,
+            kernel_and_modules = 6,
+            framebuffer = 7,
+            _,
+        },
+        else => enum(u64) {
+            usable = 0,
+            reserved = 1,
+            acpi_reclaimable = 2,
+            acpi_nvs = 3,
+            bad_memory = 4,
+            bootloader_reclaimable = 5,
+            executable_and_modules = 6,
+            framebuffer = 7,
+            _,
+        },
+    };
 
-const MemoryMapTypeV2 = enum(u64) {
-    usable = 0,
-    reserved = 1,
-    acpi_reclaimable = 2,
-    acpi_nvs = 3,
-    bad_memory = 4,
-    bootloader_reclaimable = 5,
-    executable_and_modules = 6,
-    framebuffer = 7,
-    _,
-};
+    pub const Entry = extern struct {
+        base: u64,
+        length: u64,
+        type: Type,
+    };
 
-pub const MemoryMapType = if (config.api_revision >= 2)
-    MemoryMapTypeV2
-else
-    MemoryMapTypeV1;
+    pub const Response = extern struct {
+        revision: u64,
+        entry_count: u64,
+        entries: ?[*]*Entry,
 
-pub const MemoryMapEntry = extern struct {
-    base: u64,
-    length: u64,
-    type: MemoryMapType,
-};
-
-pub const MemoryMapResponse = extern struct {
-    revision: u64,
-    entry_count: u64,
-    entries: ?[*]*MemoryMapEntry,
-
-    /// Helper function to retrieve a slice of the entries array.
-    /// This function will return null if the entry count is 0 or if
-    /// the entries pointer is null.
-    pub fn getEntries(self: @This()) []*MemoryMapEntry {
-        if (self.entry_count == 0 or self.entries == null) {
-            return &.{};
+        /// Helper function to retrieve a slice of the entries array.
+        /// This function will return null if the entry count is 0 or if
+        /// the entries pointer is null.
+        pub fn getEntries(self: @This()) []*Entry {
+            if (self.entry_count == 0 or self.entries == null) {
+                return &.{};
+            }
+            return self.entries.?[0..self.entry_count];
         }
-        return self.entries.?[0..self.entry_count];
-    }
-};
+    };
 
-pub const MemoryMapRequest = extern struct {
-    id: [4]u64 = id(0x67cf3d9d378a806f, 0xe304acdfc50c3c62),
-    revision: u64 = 0,
-    response: ?*MemoryMapResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x67cf3d9d378a806f, 0xe304acdfc50c3c62),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // Entry point
 
-pub const EntryPoint = fn () callconv(.c) noreturn;
+pub const Entrypoint = struct {
+    pub const Fn = fn () callconv(.c) noreturn;
 
-pub const EntryPointResponse = extern struct {
-    revision: u64,
-};
+    pub const Response = extern struct {
+        revision: u64,
+    };
 
-pub const EntryPointRequest = extern struct {
-    id: [4]u64 = id(0x13d86c035a1cd3e1, 0x2b0caa89d8f3026a),
-    revision: u64 = 0,
-    response: ?*EntryPointResponse = null,
-    entry: ?*const EntryPoint,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x13d86c035a1cd3e1, 0x2b0caa89d8f3026a),
+        revision: u64 = 0,
+        response: ?*Response = null,
+        entry: ?*const Fn,
+    };
 };
 
 // Executable file (formerly Kernel file)
 
-const ExecutableFileFeature = struct {
-    pub const ExecutableFileResponse = extern struct {
+pub const ExecutableFile = since(2, struct {
+    pub const Response = extern struct {
         revision: u64,
         executable_file: ?*File,
     };
 
-    pub const ExecutableFileRequest = extern struct {
+    pub const Request = extern struct {
         id: [4]u64 = id(0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69),
         revision: u64 = 0,
-        response: ?*ExecutableFileResponse = null,
+        response: ?*Response = null,
     };
-};
+},
+    \\ExecutableFile replaced KernelFile
+);
 
-const KernelFileFeature = struct {
-    pub const KernelFileResponse = extern struct {
+pub const KernelFile = deprecated(2, struct {
+    pub const Response = extern struct {
         revision: u64,
         kernel_file: ?*File,
     };
 
-    pub const KernelFileRequest = extern struct {
+    pub const Request = extern struct {
         id: [4]u64 = id(0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69),
         revision: u64 = 0,
-        response: ?*KernelFileResponse = null,
+        response: ?*Response = null,
     };
-};
-
-// pub usingnamespace if (config.api_revision >= 2)
-//     ExecutableFileFeature
-// else
-//     KernelFileFeature;
+},
+    \\KernelFile was replaced with ExecutableFile
+);
 
 // Module
 
-pub const InternalModuleFlag = packed struct(u64) {
-    required: bool,
-    compressed: bool,
-    reserved: u62 = 0,
-};
+pub const Module = struct {
+    pub const InternalModule = extern struct {
+        path: ?[*:0]const u8,
+        string: if (config.api_revision >= 3) ?[*:0]const u8 else void,
+        cmdline: if (config.api_revision >= 3) void else ?[*:0]const u8,
+        flags: Flag,
 
-const InternalModuleV1 = extern struct {
-    path: ?[*:0]const u8,
-    cmdline: ?[*:0]const u8,
-    flags: InternalModuleFlag,
-};
+        pub const Flag = packed struct(u64) {
+            required: bool,
+            compressed: bool,
+            reserved: u62 = 0,
+        };
+    };
 
-const InternalModuleV2 = extern struct {
-    path: ?[*:0]const u8,
-    string: ?[*:0]const u8,
-    flags: InternalModuleFlag,
-};
+    pub const Response = extern struct {
+        revision: u64,
+        module_count: u64,
+        modules: ?[*]*File,
 
-pub const InternalModule = if (config.api_revision >= 3)
-    InternalModuleV2
-else
-    InternalModuleV1;
-
-pub const ModuleResponse = extern struct {
-    revision: u64,
-    module_count: u64,
-    modules: ?[*]*File,
-
-    /// Helper function to retrieve a slice of the modules array.
-    /// This function will return null if the module count is 0 or if
-    /// the modules pointer is null.
-    pub fn getModules(self: @This()) []*File {
-        if (self.module_count == 0 or self.modules == null) {
-            return &.{};
+        /// Helper function to retrieve a slice of the modules array.
+        /// This function will return null if the module count is 0 or if
+        /// the modules pointer is null.
+        pub fn getModules(self: @This()) []*File {
+            if (self.module_count == 0 or self.modules == null) {
+                return &.{};
+            }
+            return self.modules.?[0..self.module_count];
         }
-        return self.modules.?[0..self.module_count];
-    }
-};
+    };
 
-pub const ModuleRequest = extern struct {
-    id: [4]u64 = id(0x3e7e279702be32af, 0xca1c4f3bd1280cee),
-    revision: u64 = 1,
-    response: ?*ModuleResponse = null,
-    // Request revision 1
-    internal_module_count: u64 = 0,
-    internal_modules: ?[*]const *const InternalModule = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x3e7e279702be32af, 0xca1c4f3bd1280cee),
+        revision: u64 = 1,
+        response: ?*Response = null,
+        // Request revision 1
+        internal_module_count: u64 = 0,
+        internal_modules: ?[*]const *const InternalModule = null,
+    };
 };
 
 // RSDP
 
-const RsdpResponseV1 = extern struct {
-    revision: u64,
-    address: ?*anyopaque,
-};
+pub const Rsdp = struct {
+    /// The response to the RSDP request. If the base revision is 1 or higher,
+    /// the response will contain physical addresses to the RSDP, otherwise
+    /// the response will contain virtual addresses to the RSDP.
+    pub const Response = union(enum(u64)) {
+        revision: u64,
+        address: if (config.api_revision >= 1) u64 else ?*anyopaque,
+    };
 
-const RsdpResponseV2 = extern struct {
-    revision: u64,
-    address: u64,
-};
-
-/// The response to the RSDP request. If the base revision is 1 or higher,
-/// the response will contain physical addresses to the RSDP, otherwise
-/// the response will contain virtual addresses to the RSDP.
-pub const RsdpResponse = if (config.api_revision >= 1)
-    RsdpResponseV2
-else
-    RsdpResponseV1;
-
-pub const RsdpRequest = extern struct {
-    id: [4]u64 = id(0xc5e77b6b397e7b43, 0x27637845accdcf3c),
-    revision: u64 = 0,
-    response: ?*RsdpResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0xc5e77b6b397e7b43, 0x27637845accdcf3c),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // SMBIOS
 
-const SmBiosResponseV1 = extern struct {
-    revision: u64,
-    entry_32: ?*anyopaque,
-    entry_64: ?*anyopaque,
-};
+pub const SmBios = struct {
+    /// The response to the SMBIOS request. If the base revision is 1 or higher,
+    /// the response will contain physical addresses to the SMBIOS entries, otherwise
+    /// the response will contain virtual addresses to the SMBIOS entries.
+    pub const Response = extern struct {
+        revision: u64,
+        entry_32: if (config.api_revision >= 1) u64 else ?*anyopaque,
+        entry_64: if (config.api_revision >= 1) u64 else ?*anyopaque,
+    };
 
-const SmBiosResponseV2 = extern struct {
-    revision: u64,
-    entry_32: u64,
-    entry_64: u64,
-};
-
-/// The response to the SMBIOS request. If the base revision is 3 or higher,
-/// the response will contain physical addresses to the SMBIOS entries, otherwise
-/// the response will contain virtual addresses to the SMBIOS entries.
-pub const SmBiosResponse = if (config.api_revision >= 1)
-    SmBiosResponseV2
-else
-    SmBiosResponseV1;
-
-pub const SmBiosRequest = extern struct {
-    id: [4]u64 = id(0x9e9046f11e095391, 0xaa4a520fefbde5ee),
-    revision: u64 = 0,
-    response: ?*SmBiosResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x9e9046f11e095391, 0xaa4a520fefbde5ee),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // EFI system table
 
-///
-const EfiSystemTableResponseV1 = extern struct {
-    revision: u64,
-    address: ?*std.os.uefi.tables.SystemTable,
-};
+pub const EfiSystemTable = struct {
+    /// The response to the EFI system table request. If the base revision is 1
+    /// or higher, the response will contain a physical address to the system table,
+    /// otherwise the response will contain a virtual address to the system table.
+    pub const Response = extern struct {
+        revision: u64,
+        address: if (config.api_revision >= 1) u64 else ?*std.os.uefi.tables.SystemTable,
+    };
 
-const EfiSystemTableResponseV2 = extern struct {
-    revision: u64,
-    address: u64,
-};
-
-/// The response to the EFI system table request. If the base revision is 3
-/// or higher, the response will contain a physical address to the system table,
-/// otherwise the response will contain a virtual address to the system table.
-pub const EfiSystemTableResponse = if (config.api_revision >= 1)
-    EfiSystemTableResponseV2
-else
-    EfiSystemTableResponseV1;
-
-pub const EfiSystemTableRequest = extern struct {
-    id: [4]u64 = id(0x5ceba5163eaaf6d6, 0x0a6981610cf65fcc),
-    revision: u64 = 0,
-    response: ?*EfiSystemTableResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x5ceba5163eaaf6d6, 0x0a6981610cf65fcc),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // EFI memory map
 
-pub const EfiMemoryMapResponse = extern struct {
-    revision: u64,
-    memmap: ?*anyopaque,
-    memmap_size: u64,
-    desc_size: u64,
-    desc_version: u64,
-};
+pub const EfiMemoryMap = struct {
+    pub const Response = extern struct {
+        revision: u64,
+        memmap: ?*anyopaque,
+        memmap_size: u64,
+        desc_size: u64,
+        desc_version: u64,
+    };
 
-pub const EfiMemoryMapRequest = extern struct {
-    id: [4]u64 = id(0x7df62a431d6872d5, 0xa4fcdfb3e57306c8),
-    revision: u64 = 0,
-    response: ?*EfiMemoryMapResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x7df62a431d6872d5, 0xa4fcdfb3e57306c8),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // Date at boot (formerly Boot time)
 
-const DateAtBootFeature = struct {
-    pub const DateAtBootResponse = extern struct {
+pub const DateAtBoot = since(3, struct {
+    pub const Response = extern struct {
         revision: u64,
         timestamp: i64,
     };
 
-    pub const DateAtBootRequest = extern struct {
+    pub const Request = extern struct {
         id: [4]u64 = id(0x502746e184c088aa, 0xfbc5ec83e6327893),
         revision: u64 = 0,
-        response: ?*DateAtBootResponse = null,
+        response: ?*Response = null,
     };
-};
+},
+    \\DateAtBoot replaced BootTime
+);
 
-const BootTimeFeature = struct {
-    pub const BootTimeResponse = extern struct {
+pub const BootTime = deprecated(3, struct {
+    pub const Response = extern struct {
         revision: u64,
         boot_time: i64,
     };
 
-    pub const BootTimeRequest = extern struct {
+    pub const Request = extern struct {
         id: [4]u64 = id(0x502746e184c088aa, 0xfbc5ec83e6327893),
         revision: u64 = 0,
-        response: ?*BootTimeResponse = null,
+        response: ?*Response = null,
     };
-};
-
-// pub usingnamespace if (config.api_revision >= 3)
-//     DateAtBootFeature
-// else
-//     BootTimeFeature;
+},
+    \\BootTime was replaced with DateAtBoot
+);
 
 // Executable address (formerly Kernel address)
 
-const ExecutableAddressFeature = struct {
-    pub const ExecutableAddressResponse = extern struct {
+pub const ExecutableAddress = since(2, struct {
+    pub const Response = extern struct {
         revision: u64,
         physical_base: u64,
         virtual_base: u64,
     };
 
-    pub const ExecutableAddressRequest = extern struct {
+    pub const Request = extern struct {
         id: [4]u64 = id(0x71ba76863cc55f63, 0xb2644a48c516a487),
         revision: u64 = 0,
-        response: ?*ExecutableAddressResponse = null,
+        response: ?*Response = null,
     };
-};
+},
+    \\ExecutableAddress replaced KernelAddress
+);
 
-const KernelAddressFeature = struct {
-    pub const KernelAddressResponse = extern struct {
+pub const KernelAddress = deprecated(2, struct {
+    pub const Response = extern struct {
         revision: u64,
         physical_base: u64,
         virtual_base: u64,
     };
 
-    pub const KernelAddressRequest = extern struct {
+    pub const Request = extern struct {
         id: [4]u64 = id(0x71ba76863cc55f63, 0xb2644a48c516a487),
         revision: u64 = 0,
-        response: ?*KernelAddressResponse = null,
+        response: ?*Response = null,
     };
-};
-
-// pub usingnamespace if (config.api_revision >= 2)
-//     ExecutableAddressFeature
-// else
-//     KernelAddressFeature;
+},
+    \\KernelAddress was replaced with ExecutableAddress
+);
 
 // Device Tree Blob
 
-pub const DtbResponse = extern struct {
-    revision: u64,
-    dtb_ptr: ?*anyopaque,
-};
+pub const DeviceTreeBlob = struct {
+    pub const Response = extern struct {
+        revision: u64,
+        dtb_ptr: ?*anyopaque,
+    };
 
-pub const DtbRequest = extern struct {
-    id: [4]u64 = id(0xb40ddb48fb54bac7, 0x545081493f81ffb7),
-    revision: u64 = 0,
-    response: ?*DtbResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0xb40ddb48fb54bac7, 0x545081493f81ffb7),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 // RISC-V Boot Hart ID
 
-pub const RiscvBootHartIdResponse = extern struct {
-    revision: u64,
-    bsp_hartid: u64,
-};
+pub const RiscvBootHartId = struct {
+    pub const Response = extern struct {
+        revision: u64,
+        bsp_hartid: u64,
+    };
 
-pub const RiscvBootHartIdRequest = extern struct {
-    id: [4]u64 = id(0x1369359f025525f9, 0x2ff2a56178391bb6),
-    revision: u64 = 0,
-    response: ?*RiscvBootHartIdResponse = null,
+    pub const Request = extern struct {
+        id: [4]u64 = id(0x1369359f025525f9, 0x2ff2a56178391bb6),
+        revision: u64 = 0,
+        response: ?*Response = null,
+    };
 };
 
 comptime {
