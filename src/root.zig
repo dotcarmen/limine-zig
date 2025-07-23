@@ -325,148 +325,132 @@ pub const PagingModeRequest = extern struct {
 
 // MP (formerly SMP)
 
-const SmpMpFlags = switch (arch) {
-    .x86_64 => packed struct(u32) {
-        x2apic: bool = false,
-        reserved: u31 = 0,
-    },
-    .aarch64, .riscv64, .loongarch64 => packed struct(u64) {
-        reserved: u64 = 0,
-    },
-};
-
-const SmpMpInfo = switch (arch) {
-    .x86_64 => extern struct {
-        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
-
-        processor_id: u32,
-        lapic_id: u32,
-        reserved: u64,
-        goto_address: ?*const GotoAddress,
-        extra_argument: u64,
-    },
-    .aarch64 => extern struct {
-        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
-
-        processor_id: u32,
-        mpidr: u64,
-        reserved: u64,
-        goto_address: ?*const GotoAddress,
-        extra_argument: u64,
-    },
-    .riscv64 => extern struct {
-        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
-
-        processor_id: u64,
-        hartid: u64,
-        reserved: u64,
-        goto_address: ?*const GotoAddress,
-        extra_argument: u64,
-    },
-    .loongarch64 => extern struct {
-        pub const GotoAddress = fn (*SmpMpInfo) callconv(.c) noreturn;
-
-        reserved: u64,
-    },
-};
-
-const SmpMpResponse = switch (arch) {
-    .x86_64 => extern struct {
-        revision: u64,
-        flags: SmpMpFlags,
-        bsp_lapic_id: u32,
-        cpu_count: u64,
-        cpus: ?[*]*SmpMpInfo,
-
-        /// Helper function to retrieve a slice of the CPUs array.
-        /// This function will return null if the CPU count is 0 or if
-        /// the CPUs pointer is null.
-        pub fn getCpus(self: @This()) []*SmpMpInfo {
-            if (self.cpu_count == 0 or self.cpus == null) {
-                return &.{};
-            }
-            return self.cpus.?[0..self.cpu_count];
-        }
-    },
-    .aarch64 => extern struct {
-        revision: u64,
-        flags: SmpMpFlags,
-        bsp_mpidr: u64,
-        cpu_count: u64,
-        cpus: ?[*]*SmpMpInfo,
-
-        /// Helper function to retrieve a slice of the CPUs array.
-        /// This function will return null if the CPU count is 0 or if
-        /// the CPUs pointer is null.
-        pub fn getCpus(self: @This()) []*SmpMpInfo {
-            if (self.cpu_count == 0 or self.cpus == null) {
-                return &.{};
-            }
-            return self.cpus.?[0..self.cpu_count];
-        }
-    },
-    .riscv64 => extern struct {
-        revision: u64,
-        flags: SmpMpFlags,
-        bsp_hartid: u64,
-        cpu_count: u64,
-        cpus: ?[*]*SmpMpInfo,
-
-        /// Helper function to retrieve a slice of the CPUs array.
-        /// This function will return null if the CPU count is 0 or if
-        /// the CPUs pointer is null.
-        pub fn getCpus(self: @This()) []*SmpMpInfo {
-            if (self.cpu_count == 0 or self.cpus == null) {
-                return &.{};
-            }
-            return self.cpus.?[0..self.cpu_count];
-        }
-    },
-    .loongarch64 => extern struct {
-        cpu_count: u64,
-        cpus: ?[*]*SmpMpInfo,
-
-        /// Helper function to retrieve a slice of the CPUs array.
-        /// This function will return null if the CPU count is 0 or if
-        /// the CPUs pointer is null.
-        pub fn getCpus(self: @This()) []*SmpMpInfo {
-            if (self.cpu_count == 0 or self.cpus == null) {
-                return &.{};
-            }
-            return self.cpus.?[0..self.cpu_count];
-        }
-    },
-};
-
 const SmpMpRequest = extern struct {
     id: [4]u64 = id(0x95a67b819a1b857e, 0xa0b61b723b6a73e0),
     revision: u64 = 0,
-    response: ?*SmpMpResponse = null,
+    response: ?*Response = null,
     // The `flags` field in the request is 64-bit on *all* platforms, even
     // though the flags enum is 32-bit on x86_64. This is to ensure that the
     // struct is not too small on x86_64 there is a `reserved: u32` field after it.
-    flags: SmpMpFlags = .{},
+    flags: Flags = .{},
     reserved: u32 = 0,
+
+    const Flags = switch (arch) {
+        .x86_64 => packed struct(u32) {
+            x2apic: bool = false,
+            reserved: u31 = 0,
+        },
+        .aarch64, .riscv64, .loongarch64 => packed struct(u64) {
+            reserved: u64 = 0,
+        },
+    };
+
+    const Info = switch (arch) {
+        .x86_64 => extern struct {
+            pub const GotoAddress = fn (*Info) callconv(.c) noreturn;
+
+            processor_id: u32,
+            lapic_id: u32,
+            reserved: u64,
+            goto_address: ?*const GotoAddress,
+            extra_argument: u64,
+        },
+        .aarch64 => extern struct {
+            pub const GotoAddress = fn (*Info) callconv(.c) noreturn;
+
+            processor_id: u32,
+            mpidr: u64,
+            reserved: u64,
+            goto_address: ?*const GotoAddress,
+            extra_argument: u64,
+        },
+        .riscv64 => extern struct {
+            pub const GotoAddress = fn (*Info) callconv(.c) noreturn;
+
+            processor_id: u64,
+            hartid: u64,
+            reserved: u64,
+            goto_address: ?*const GotoAddress,
+            extra_argument: u64,
+        },
+        .loongarch64 => extern struct {
+            pub const GotoAddress = fn (*Info) callconv(.c) noreturn;
+
+            reserved: u64,
+        },
+    };
+
+    const Response = switch (arch) {
+        .x86_64 => extern struct {
+            revision: u64,
+            flags: Flags,
+            bsp_lapic_id: u32,
+            cpu_count: u64,
+            cpus: ?[*]*Info,
+
+            /// Helper function to retrieve a slice of the CPUs array.
+            /// This function will return null if the CPU count is 0 or if
+            /// the CPUs pointer is null.
+            pub fn getCpus(self: @This()) []*Info {
+                if (self.cpu_count == 0 or self.cpus == null) {
+                    return &.{};
+                }
+                return self.cpus.?[0..self.cpu_count];
+            }
+        },
+        .aarch64 => extern struct {
+            revision: u64,
+            flags: Flags,
+            bsp_mpidr: u64,
+            cpu_count: u64,
+            cpus: ?[*]*Info,
+
+            /// Helper function to retrieve a slice of the CPUs array.
+            /// This function will return null if the CPU count is 0 or if
+            /// the CPUs pointer is null.
+            pub fn getCpus(self: @This()) []*Info {
+                if (self.cpu_count == 0 or self.cpus == null) {
+                    return &.{};
+                }
+                return self.cpus.?[0..self.cpu_count];
+            }
+        },
+        .riscv64 => extern struct {
+            revision: u64,
+            flags: Flags,
+            bsp_hartid: u64,
+            cpu_count: u64,
+            cpus: ?[*]*Info,
+
+            /// Helper function to retrieve a slice of the CPUs array.
+            /// This function will return null if the CPU count is 0 or if
+            /// the CPUs pointer is null.
+            pub fn getCpus(self: @This()) []*Info {
+                if (self.cpu_count == 0 or self.cpus == null) {
+                    return &.{};
+                }
+                return self.cpus.?[0..self.cpu_count];
+            }
+        },
+        .loongarch64 => extern struct {
+            cpu_count: u64,
+            cpus: ?[*]*Info,
+
+            /// Helper function to retrieve a slice of the CPUs array.
+            /// This function will return null if the CPU count is 0 or if
+            /// the CPUs pointer is null.
+            pub fn getCpus(self: @This()) []*Info {
+                if (self.cpu_count == 0 or self.cpus == null) {
+                    return &.{};
+                }
+                return self.cpus.?[0..self.cpu_count];
+            }
+        },
+    };
 };
 
-const MpFeature = struct {
-    pub const MpFlags = SmpMpFlags;
-    pub const MpInfo = SmpMpInfo;
-    pub const MpResponse = SmpMpResponse;
-    pub const MpRequest = SmpMpRequest;
-};
-
-const SmpFeature = struct {
-    pub const SmpFlags = SmpMpFlags;
-    pub const SmpInfo = SmpMpInfo;
-    pub const SmpResponse = SmpMpResponse;
-    pub const SmpRequest = SmpMpRequest;
-};
-
-// pub usingnamespace if (config.api_revision >= 1)
-//     MpFeature
-// else
-//     SmpFeature;
+pub const MpRequest = if (config.api_revision >= 1) SmpMpRequest else @compileError("MP was called SMP in limine api revision 0");
+pub const SmpRequest = if (config.api_revision == 0) SmpMpRequest else @compileError("SMP was renamed MP in limine api revision 1");
 
 // Memory map
 
