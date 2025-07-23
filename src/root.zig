@@ -56,23 +56,28 @@ pub const RequestsEndMarker = extern struct {
 };
 
 pub const BaseRevision = extern struct {
-    magic: [2]u64 = .{ 0xf9562b2d5c95a6c8, 0x6a7b384944536bdc },
+    const MAGIC: [2]u64 = .{ 0xf9562b2d5c95a6c8, 0x6a7b384944536bdc };
+
+    magic: [2]u64 = MAGIC,
     revision: u64 = config.api_revision,
+
+    pub const UnsupportedRevisionError = error{
+        /// The bootloader failed to set the revision to this request.
+        NoRevisionResponse,
+        /// Requested revision is not supported by the bootloader yet.
+        UnsupportedRevision,
+    };
 
     pub fn init(revision: u64) @This() {
         return .{ .revision = revision };
     }
 
-    pub fn loadedRevision(self: @This()) u64 {
+    pub fn loadedRevision(self: @This()) UnsupportedRevisionError!u64 {
+        if (self.magic[1] == MAGIC[1])
+            return error.NoRevisionResponse;
+        if (self.revision != 0)
+            return error.UnsupportedRevision;
         return self.magic[1];
-    }
-
-    pub fn isValid(self: @This()) bool {
-        return self.magic[1] != 0x6a7b384944536bdc;
-    }
-
-    pub fn isSupported(self: @This()) bool {
-        return self.revision == 0;
     }
 };
 
