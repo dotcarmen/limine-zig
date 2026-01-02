@@ -475,7 +475,7 @@ const MpSmp = struct {
 };
 
 pub const Mp = since(1, MpSmp,
-    \\Mp was renamed from SMP
+    \\Mp was named SMP in revision 0 of the API
 );
 pub const Smp = deprecated(1, MpSmp,
     \\SMP was renamed MP
