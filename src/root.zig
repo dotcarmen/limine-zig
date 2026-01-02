@@ -365,7 +365,7 @@ const MpSmp = struct {
             processor_id: u32,
             mpidr: u64,
             reserved: u64,
-            goto_address: ?*const GotoAddress,
+            goto_address: std.atomic.Value(?*const GotoAddress),
             extra_argument: u64,
         },
         .riscv64 => extern struct {
