@@ -496,6 +496,17 @@ pub const MemoryMap = struct {
             framebuffer = 7,
             _,
         },
+        2...3 => enum(u64) {
+            usable = 0,
+            reserved = 1,
+            acpi_reclaimable = 2,
+            acpi_nvs = 3,
+            bad_memory = 4,
+            bootloader_reclaimable = 5,
+            executable_and_modules = 6,
+            framebuffer = 7,
+            _,
+        },
         else => enum(u64) {
             usable = 0,
             reserved = 1,
@@ -505,6 +516,7 @@ pub const MemoryMap = struct {
             bootloader_reclaimable = 5,
             executable_and_modules = 6,
             framebuffer = 7,
+            acpi_tables = 8,
             _,
         },
     };
@@ -637,7 +649,7 @@ pub const Rsdp = struct {
     /// the response will contain virtual addresses to the RSDP.
     pub const Response = union(enum(u64)) {
         revision: u64,
-        address: if (config.api_revision >= 1) u64 else ?*anyopaque,
+        address: if (config.api_revision == 3) u64 else ?*anyopaque,
     };
 
     pub const Request = extern struct {
