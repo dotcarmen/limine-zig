@@ -198,7 +198,7 @@ pub const Hhdm = struct {
 // Framebuffer
 
 pub const Framebuffer = extern struct {
-    address: ?*anyopaque,
+    address: ?[*]volatile u8,
     width: u64,
     height: u64,
     pitch: u64,
