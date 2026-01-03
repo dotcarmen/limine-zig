@@ -811,8 +811,8 @@ pub const RiscvBootHartId = struct {
 };
 
 comptime {
-    if (config.api_revision > 3) {
-        @compileError("Limine API revision must be 3 or lower");
+    if (config.api_revision > 4) {
+        @compileError("Limine API revision must be 4 or lower");
     }
 }
 
